@@ -5,7 +5,7 @@ const contracts = {
       name: "localhost",
       contracts: {
         AjoDAO: {
-          address: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+          address: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
           abi: [
             {
               inputs: [
@@ -82,6 +82,19 @@ const contracts = {
               anonymous: false,
               inputs: [
                 {
+                  indexed: true,
+                  internalType: "address",
+                  name: "participant",
+                  type: "address",
+                },
+              ],
+              name: "ParticipantJoined",
+              type: "event",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
                   indexed: false,
                   internalType: "uint256",
                   name: "cycleNumber",
@@ -145,6 +158,19 @@ const contracts = {
                 },
               ],
               name: "PenaltyPaid",
+              type: "event",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "enum AjoDAO.TANDA_STATE",
+                  name: "newState",
+                  type: "uint8",
+                },
+              ],
+              name: "StateChanged",
               type: "event",
             },
             {
@@ -286,6 +312,43 @@ const contracts = {
                 },
               ],
               stateMutability: "view",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "address",
+                  name: "",
+                  type: "address",
+                },
+              ],
+              name: "isParticipant",
+              outputs: [
+                {
+                  internalType: "bool",
+                  name: "",
+                  type: "bool",
+                },
+              ],
+              stateMutability: "view",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "address",
+                  name: "_token",
+                  type: "address",
+                },
+                {
+                  internalType: "uint256",
+                  name: "_contributionAmount",
+                  type: "uint256",
+                },
+              ],
+              name: "joinAjoClub",
+              outputs: [],
+              stateMutability: "payable",
               type: "function",
             },
             {

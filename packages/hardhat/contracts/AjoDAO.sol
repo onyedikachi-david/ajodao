@@ -9,6 +9,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
+import "./PriceConverter.sol";
 
 // Useful for debugging. Remove when deploying to a live network.
 import "hardhat/console.sol";
@@ -27,7 +28,7 @@ import "hardhat/console.sol";
  */
 contract AjoDAO is IERC721Receiver {
 	using SafeERC20 for IERC20;
-	// using PriceConverter for uint256;
+	using PriceConverter for uint256;
 
 	// State Variables
 	VRFCoordinatorV2Interface COORDINATOR;
@@ -115,6 +116,8 @@ contract AjoDAO is IERC721Receiver {
 		uint256 totalAmount;
 	}
 
+	mapping(address => bool) public isParticipant;
+
 	// Fee collection
 	uint256 public ServiceFeePurse;
 	mapping(address => uint256) public ServiceFeePurseTokenBalances;
@@ -149,6 +152,9 @@ contract AjoDAO is IERC721Receiver {
 
 	event PenaltyPaid(address indexed member, uint amount);
 	event PenaltyFailed(address indexed member, uint amount, string reason);
+
+	event ParticipantJoined(address indexed participant);
+	event StateChanged(TANDA_STATE newState);
 
 	// Errors
 	/// Function cannot be called at this time.
@@ -230,7 +236,7 @@ contract AjoDAO is IERC721Receiver {
 	function payPenaltyFee(
 		address _tokenAddress,
 		uint256 _tokenAmount
-	) external payable atState(TANDA_STATE.OPEN) penaltyNotPaid {
+	) external payable atState(TANDA_STATE.OPEN) {
 		AjoDAOData storage s = s_ajoDao;
 		require(
 			isValidToken(_tokenAddress),
@@ -261,6 +267,83 @@ contract AjoDAO is IERC721Receiver {
 		}
 
 		s.hasPaidPenalty[msg.sender] = true;
+	}
+
+	function joinAjoClub(
+		address _token,
+		uint256 _contributionAmount
+	) external payable atState(TANDA_STATE.OPEN) penaltyNotPaid {
+		AjoDAOData storage s = s_ajoDao;
+		require(
+			s.maxParticipants != s.contributors.length,
+			"Maximum participants reached, Pot can't accept any more members"
+		);
+		require(s.hasPaidPenalty[msg.sender], "Penalty fee not paid");
+
+		require(!isParticipant[msg.sender], "Already a participant");
+		require(
+			isValidToken(_token),
+			"Invalid Token, confirm pot details for accepted token"
+		);
+
+		if (_token == address(0)) {
+			require(
+				msg.value == s.contributionAmount + MAXIMUM_FEE_USD,
+				"Incorrect amount"
+			);
+
+			// Calculating fee for ether payment
+			uint256 serviceFee;
+			if (msg.value / 200 > MAXIMUM_FEE_USD) {
+				serviceFee = MAXIMUM_FEE_USD.getConversionRate(
+					i_priceFeedNative
+				);
+			} else {
+				serviceFee = msg.value / 200;
+			}
+			ServiceFeePurse += serviceFee;
+			AjoDAOPurseBalance += (msg.value - serviceFee);
+			s.contributors.push(msg.sender);
+			isParticipant[msg.sender] = true;
+		} else {
+			require(msg.value == 0, "Invalid Ether value");
+			require(
+				_contributionAmount > s.contributionAmount,
+				"Invalid token amount"
+			);
+			require(_token == s.token, "Invalid token");
+			// Calculating fee for ether payment
+			uint256 serviceFee;
+			if (_contributionAmount / 200 > MAXIMUM_FEE_USD) {
+				serviceFee = MAXIMUM_FEE_USD.getConversionRate(
+					i_priceFeedNative
+				);
+			} else {
+				serviceFee = _contributionAmount / 200;
+
+				ServiceFeePurseTokenBalances[_token] += serviceFee;
+
+				IERC20(_token).safeTransferFrom(
+					msg.sender,
+					address(this),
+					_contributionAmount
+				);
+
+				AjoDAOPurseTokenBalance[_token] += (_contributionAmount -
+					serviceFee);
+				s.contributors.push(msg.sender);
+				isParticipant[msg.sender] = true;
+			}
+		}
+		// Emit someone joined
+		emit ParticipantJoined(msg.sender);
+
+		// Change state when the maxParticipant is reached
+		if (s.maxParticipants == s.contributors.length) {
+			s.t_state = TANDA_STATE.PAYMENT_IN_PROGRESS;
+		}
+		// Emit change of state
+		emit StateChanged(s.t_state);
 	}
 
 	/**
