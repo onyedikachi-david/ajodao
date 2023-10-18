@@ -1,8 +1,9 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
+import { ethers } from "hardhat";
 
 /**
- * Deploys a contract named "YourContract" using the deployer account and
+ * Deploys a contract named "AjoDAO" using the deployer account and
  * constructor arguments set to the deployer address
  *
  * @param hre HardhatRuntimeEnvironment object.
@@ -20,11 +21,20 @@ const deployYourContract: DeployFunction = async function (hre: HardhatRuntimeEn
   */
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
+  const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-  await deploy("YourContract", {
+  await deploy("AjoDAO", {
     from: deployer,
     // Contract constructor arguments
-    args: [deployer],
+    args: [
+      ZERO_ADDRESS, // Zero address
+      30,
+      ethers.utils.parseEther("1"),
+      ethers.utils.parseEther("0.5"),
+      10,
+      "AjoDAO Alpha",
+      "First AjoDAO test cycle",
+    ],
     log: true,
     // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
     // automatically mining the contract deployment transaction. There is no effect on live networks.
@@ -32,11 +42,11 @@ const deployYourContract: DeployFunction = async function (hre: HardhatRuntimeEn
   });
 
   // Get the deployed contract
-  // const yourContract = await hre.ethers.getContract("YourContract", deployer);
+  // const yourContract = await hre.ethers.getContract("AjoDAO", deployer);
 };
 
 export default deployYourContract;
 
 // Tags are useful if you have multiple deploy files and only want to run one of them.
-// e.g. yarn deploy --tags YourContract
-deployYourContract.tags = ["YourContract"];
+// e.g. yarn deploy --tags AjoDAO
+deployYourContract.tags = ["AjoDAO"];
