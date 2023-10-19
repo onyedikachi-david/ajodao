@@ -34,6 +34,7 @@ contract AjoDAO is IERC721Receiver {
 	VRFCoordinatorV2Interface COORDINATOR;
 	LinkTokenInterface LINKTOKEN;
 	address public i_priceFeedToken;
+	uint contributedCount;
 
 	// Chainlink PriceFeeds - (token / USD)
 	AggregatorV3Interface private immutable i_priceFeedNative;
@@ -104,7 +105,7 @@ contract AjoDAO is IERC721Receiver {
 		// Additional parameters
 		address[] contributors;
 		mapping(address => uint256) contributorAmounts;
-		mapping(uint256 => CycleData) cycleHistory;
+		mapping(uint256 => CycleData) cycleHistory; // Timestamp -> CycleData
 		mapping(address => bool) hasPaidPenalty;
 	}
 
@@ -117,6 +118,7 @@ contract AjoDAO is IERC721Receiver {
 	}
 
 	mapping(address => bool) public isParticipant;
+	mapping(address => bool) public hasContributed;
 
 	// Fee collection
 	uint256 public ServiceFeePurse;
@@ -135,7 +137,8 @@ contract AjoDAO is IERC721Receiver {
 		OPEN,
 		CLOSED,
 		PAYMENT_IN_PROGRESS,
-		COMPLETED
+		COMPLETED,
+		CONTRIBUTING
 	}
 
 	// Events:
@@ -155,6 +158,7 @@ contract AjoDAO is IERC721Receiver {
 
 	event ParticipantJoined(address indexed participant);
 	event StateChanged(TANDA_STATE newState);
+	event ParticipantContributed(address indexed, uint amount);
 
 	// Errors
 	/// Function cannot be called at this time.
@@ -342,8 +346,52 @@ contract AjoDAO is IERC721Receiver {
 		if (s.maxParticipants == s.contributors.length) {
 			s.t_state = TANDA_STATE.PAYMENT_IN_PROGRESS;
 		}
+
+		// CycleData memory newCycle;
+
+		// newCycle.cycleNumber = s.cycleHistory.length + 1;
+		// newCycle.cycleStartTime = block.timestamp;
+
+		// s.cycleHistory[newCycle.cycleNumber] = newCycle;
+
 		// Emit change of state
 		emit StateChanged(s.t_state);
+	}
+
+	// Make contribution
+	function contribute(uint256 _amount) external payable {
+		AjoDAOData storage s = s_ajoDao;
+		// Check that the user is participant
+		require(
+			isParticipant[msg.sender],
+			"You must join club before contributing"
+		);
+		require(s.t_state == TANDA_STATE.CONTRIBUTING, "Wrong state");
+
+		require(_amount == s.contributionAmount, "Wrong amount");
+
+		// Check allowance, even for those functions above.
+
+		if (s.token == address(0)) {
+			require(msg.value == s.contributionAmount, "Wrong amount");
+			AjoDAOPurseBalance += msg.value;
+		} else {
+			require(_amount == s.contributionAmount, "Wrong amount");
+			IERC20(s.token).safeTransferFrom(
+				msg.sender,
+				address(this),
+				_amount
+			);
+
+			AjoDAOPurseTokenBalance[s.token] += _amount;
+		}
+
+		emit ParticipantContributed(msg.sender, _amount);
+		contributedCount++;
+
+		if (contributedCount == s.maxParticipants) {
+			s.t_state = TANDA_STATE.PAYMENT_IN_PROGRESS;
+		}
 	}
 
 	/**

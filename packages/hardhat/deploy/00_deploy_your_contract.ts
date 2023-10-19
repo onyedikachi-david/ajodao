@@ -31,7 +31,7 @@ const deployYourContract: DeployFunction = async function (hre: HardhatRuntimeEn
       30,
       ethers.utils.parseEther("1"),
       ethers.utils.parseEther("0.5"),
-      10,
+      1,
       "AjoDAO Alpha",
       "First AjoDAO test cycle",
     ],
