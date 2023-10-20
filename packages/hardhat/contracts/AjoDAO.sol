@@ -9,6 +9,9 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
+import "@chainlink/contracts/src/v0.8/AutomationCompatible.sol";
+import "@chainlink/contracts/src/v0.8/VRFV2WrapperConsumerBase.sol";
+
 import "./PriceConverter.sol";
 
 // Useful for debugging. Remove when deploying to a live network.
@@ -26,7 +29,7 @@ import "hardhat/console.sol";
  * Supports ETH and ERC20-compliant tokens.
  * @author David Onyedikachi Anyatonwu
  */
-contract AjoDAO is IERC721Receiver {
+contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperConsumerBase {
 	using SafeERC20 for IERC20;
 	using PriceConverter for uint256;
 
@@ -34,7 +37,8 @@ contract AjoDAO is IERC721Receiver {
 	VRFCoordinatorV2Interface COORDINATOR;
 	LinkTokenInterface LINKTOKEN;
 	address public i_priceFeedToken;
-	uint contributedCount;
+	uint256 contributedCount;
+	uint256 paidParticipants;
 
 	// Chainlink PriceFeeds - (token / USD)
 	AggregatorV3Interface private immutable i_priceFeedNative;
@@ -153,16 +157,20 @@ contract AjoDAO is IERC721Receiver {
 		address recipient
 	);
 
-	event PenaltyPaid(address indexed member, uint amount);
-	event PenaltyFailed(address indexed member, uint amount, string reason);
+	event PenaltyPaid(address indexed member, uint256 amount);
+	event PenaltyFailed(address indexed member, uint256 amount, string reason);
 
 	event ParticipantJoined(address indexed participant);
 	event StateChanged(TANDA_STATE newState);
-	event ParticipantContributed(address indexed, uint amount);
+	event ParticipantContributed(address indexed, uint256 amount);
+	event AjoPotWinner(address potWinner, uint256 amount);
 
 	// Errors
 	/// Function cannot be called at this time.
 	error FunctionInvalidAtThisState();
+	    error InsufficientFunds(uint256 balance, uint256 paid);
+		error TransferFailed();
+
 
 	// Modifiers:
 	modifier atState(TANDA_STATE tanda_state_) {
@@ -188,8 +196,13 @@ contract AjoDAO is IERC721Receiver {
 		uint256 _penalty,
 		uint256 _maxParticipant,
 		string memory _name,
-		string memory _description
-	) {
+		string memory _description,
+		 address _linkAddress,
+        address _wrapperAddress
+
+	)         VRFV2WrapperConsumerBase(_linkAddress, _wrapperAddress)
+
+	{
 		require(
 			_contributionAmount % 2 == 0,
 			"Contribution amount must be divisible by 2"
@@ -347,12 +360,7 @@ contract AjoDAO is IERC721Receiver {
 			s.t_state = TANDA_STATE.PAYMENT_IN_PROGRESS;
 		}
 
-		// CycleData memory newCycle;
 
-		// newCycle.cycleNumber = s.cycleHistory.length + 1;
-		// newCycle.cycleStartTime = block.timestamp;
-
-		// s.cycleHistory[newCycle.cycleNumber] = newCycle;
 
 		// Emit change of state
 		emit StateChanged(s.t_state);
@@ -393,6 +401,77 @@ contract AjoDAO is IERC721Receiver {
 			s.t_state = TANDA_STATE.PAYMENT_IN_PROGRESS;
 		}
 	}
+
+	function checkUpkeep(bytes memory checkData) public view override returns (bool upkeepNeeded, bytes memory performData){
+		AjoDAOData storage s = s_ajoDao;
+
+		require(s.cycleDuration > 0, "Invalid cycle duration");
+
+  if (s.t_state == TANDA_STATE.PAYMENT_IN_PROGRESS &&
+      block.timestamp >= s.lastUpdateTimestamp + s.cycleDuration) {
+
+    return (true, "");
+
+  } else {
+
+    return (false, "") ;
+
+  }
+
+	}
+
+	function performUpkeep(bytes calldata _performData) external {
+				AjoDAOData storage s = s_ajoDao;
+
+		 if (s.t_state == TANDA_STATE.PAYMENT_IN_PROGRESS &&
+      block.timestamp >= s.lastUpdateTimestamp + s.cycleDuration) {
+// 		  requestRandomWords();
+	}
+	}
+
+	function requestRandomWords(uint32 _callbackGaslimit, uint16 _requestConfirmations, uint32 _numWords) external returns (uint256 requestId){
+		requestId = requestRandomness(_callbackGaslimit, _requestConfirmations, _numWords);
+		uint256 paid = VRF_V2_WRAPPER.calculateRequestPrice(_callbackGaslimit);
+		uint256 balance = LINK.balanceOf(address(this));
+		if (balance < paid) revert InsufficientFunds(balance, paid);
+		return requestId;
+
+	}
+
+	function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords) internal override {
+		AjoDAOData storage s = s_ajoDao;
+		s_randomWords = _randomWords;
+		uint256 potWinnerIndex = s_randomWords[0] %  s.contributors.length;
+		address potWinner = s.contributors[potWinnerIndex];
+
+		if (AjoDAOPurseBalance >= s.contributionAmount * s.contributors.length) {
+			(bool success, ) = msg.sender.call{value: AjoDAOPurseBalance}("");
+			if (!success) {
+				revert TransferFailed();
+			}
+			emit AjoPotWinner(msg.sender, AjoDAOPurseBalance);
+			AjoDAOPurseBalance = 0;
+		} else if (AjoDAOPursePenaltyTokenBalance[s.token] >= s.contributionAmount * s.contributors.length) {
+			address payable tokenAddress = payable(s.token);
+			bool success = IERC20(tokenAddress).transfer(msg.sender, AjoDAOPursePenaltyTokenBalance[s.token]);
+			if (!success) {
+				revert TransferFailed();
+			}
+					emit AjoPotWinner(msg.sender, AjoDAOPurseBalance);
+
+		}
+
+		paidParticipants++;
+		if (paidParticipants == s.maxParticipants) {
+			s.t_state = TANDA_STATE.CLOSED;
+
+		} else {
+			s.t_state = TANDA_STATE.OPEN;
+
+		}
+
+	}
+
 
 	/**
 	 * Function that allows the contract to receive ETH

@@ -1,11 +1,11 @@
 const contracts = {
-  1: [
+  31337: [
     {
-      chainId: "1",
+      chainId: "31337",
       name: "localhost",
       contracts: {
         AjoDAO: {
-          address: "0xc775bF567D67018dfFac4E89a7Cf10f0EDd0Be93",
+          address: "0x3489745eff9525CCC3d8c648102FE2cf3485e228",
           abi: [
             {
               inputs: [
@@ -76,6 +76,25 @@ const contracts = {
                 },
               ],
               name: "CycleClosed",
+              type: "event",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
+                  indexed: true,
+                  internalType: "address",
+                  name: "",
+                  type: "address",
+                },
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "amount",
+                  type: "uint256",
+                },
+              ],
+              name: "ParticipantContributed",
               type: "event",
             },
             {
@@ -296,6 +315,38 @@ const contracts = {
                   internalType: "uint256",
                   name: "",
                   type: "uint256",
+                },
+              ],
+              stateMutability: "view",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "uint256",
+                  name: "_amount",
+                  type: "uint256",
+                },
+              ],
+              name: "contribute",
+              outputs: [],
+              stateMutability: "payable",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "address",
+                  name: "",
+                  type: "address",
+                },
+              ],
+              name: "hasContributed",
+              outputs: [
+                {
+                  internalType: "bool",
+                  name: "",
+                  type: "bool",
                 },
               ],
               stateMutability: "view",
