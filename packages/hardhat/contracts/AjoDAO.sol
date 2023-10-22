@@ -20,6 +20,14 @@ import "hardhat/console.sol";
 // Use openzeppelin to inherit battle-tested implementations (ERC20, ERC721, etc)
 // import "@openzeppelin/contracts/access/Ownable.sol";
 
+interface IPUSHCommInterface {
+	function sendNotification(
+		address _channel,
+		address _recipient,
+		bytes calldata _identity
+	) external;
+}
+
 /**
  * is an agreement between
  * trusted friends to contribute funds on a periodic basis to a "pot", and in
@@ -29,7 +37,11 @@ import "hardhat/console.sol";
  * Supports ETH and ERC20-compliant tokens.
  * @author David Onyedikachi Anyatonwu
  */
-contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperConsumerBase {
+contract AjoDAO is
+	IERC721Receiver,
+	AutomationCompatibleInterface,
+	VRFV2WrapperConsumerBase
+{
 	using SafeERC20 for IERC20;
 	using PriceConverter for uint256;
 
@@ -39,6 +51,9 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 	address public i_priceFeedToken;
 	uint256 contributedCount;
 	uint256 paidParticipants;
+
+	address public EPNS_COMM_ADDRESS =
+		0xb3971BCef2D791bc4027BbfedFb47319A4AAaaAa;
 
 	// Chainlink PriceFeeds - (token / USD)
 	AggregatorV3Interface private immutable i_priceFeedNative;
@@ -168,9 +183,8 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 	// Errors
 	/// Function cannot be called at this time.
 	error FunctionInvalidAtThisState();
-	    error InsufficientFunds(uint256 balance, uint256 paid);
-		error TransferFailed();
-
+	error InsufficientFunds(uint256 balance, uint256 paid);
+	error TransferFailed();
 
 	// Modifiers:
 	modifier atState(TANDA_STATE tanda_state_) {
@@ -197,12 +211,9 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 		uint256 _maxParticipant,
 		string memory _name,
 		string memory _description,
-		 address _linkAddress,
-        address _wrapperAddress
-
-	)         VRFV2WrapperConsumerBase(_linkAddress, _wrapperAddress)
-
-	{
+		address _linkAddress,
+		address _wrapperAddress
+	) VRFV2WrapperConsumerBase(_linkAddress, _wrapperAddress) {
 		require(
 			_contributionAmount % 2 == 0,
 			"Contribution amount must be divisible by 2"
@@ -284,6 +295,12 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 		}
 
 		s.hasPaidPenalty[msg.sender] = true;
+
+		pushNotification(
+			msg.sender,
+			"Penalty Fee Paid",
+			"Your penalty fee has been paid."
+		);
 	}
 
 	function joinAjoClub(
@@ -351,6 +368,12 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 				s.contributors.push(msg.sender);
 				isParticipant[msg.sender] = true;
 			}
+
+			pushNotification(
+				msg.sender,
+				"Joined Ajo Club",
+				"You have successfully joined the Ajo Club."
+			);
 		}
 		// Emit someone joined
 		emit ParticipantJoined(msg.sender);
@@ -359,8 +382,6 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 		if (s.maxParticipants == s.contributors.length) {
 			s.t_state = TANDA_STATE.PAYMENT_IN_PROGRESS;
 		}
-
-
 
 		// Emit change of state
 		emit StateChanged(s.t_state);
@@ -397,81 +418,112 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 		emit ParticipantContributed(msg.sender, _amount);
 		contributedCount++;
 
+		pushNotification(
+			msg.sender,
+			"Contribution Received",
+			"Your contribution has been received."
+		);
+
 		if (contributedCount == s.maxParticipants) {
 			s.t_state = TANDA_STATE.PAYMENT_IN_PROGRESS;
 		}
 	}
 
-	function checkUpkeep(bytes memory checkData) public view override returns (bool upkeepNeeded, bytes memory performData){
+	function checkUpkeep(
+		bytes memory checkData
+	)
+		public
+		view
+		override
+		returns (bool upkeepNeeded, bytes memory performData)
+	{
 		AjoDAOData storage s = s_ajoDao;
 
 		require(s.cycleDuration > 0, "Invalid cycle duration");
 
-  if (s.t_state == TANDA_STATE.PAYMENT_IN_PROGRESS &&
-      block.timestamp >= s.lastUpdateTimestamp + s.cycleDuration) {
-
-    return (true, "");
-
-  } else {
-
-    return (false, "") ;
-
-  }
-
+		if (
+			s.t_state == TANDA_STATE.PAYMENT_IN_PROGRESS &&
+			block.timestamp >= s.lastUpdateTimestamp + s.cycleDuration
+		) {
+			return (true, "");
+		} else {
+			return (false, "");
+		}
 	}
 
 	function performUpkeep(bytes calldata _performData) external {
-				AjoDAOData storage s = s_ajoDao;
+		AjoDAOData storage s = s_ajoDao;
 
-		 if (s.t_state == TANDA_STATE.PAYMENT_IN_PROGRESS &&
-      block.timestamp >= s.lastUpdateTimestamp + s.cycleDuration) {
-// 		  requestRandomWords();
-	}
+		if (
+			s.t_state == TANDA_STATE.PAYMENT_IN_PROGRESS &&
+			block.timestamp >= s.lastUpdateTimestamp + s.cycleDuration
+		) {
+			// 		  requestRandomWords();
+		}
 	}
 
-	function requestRandomWords(uint32 _callbackGaslimit, uint16 _requestConfirmations, uint32 _numWords) external returns (uint256 requestId){
-		requestId = requestRandomness(_callbackGaslimit, _requestConfirmations, _numWords);
+	function requestRandomWords(
+		uint32 _callbackGaslimit,
+		uint16 _requestConfirmations,
+		uint32 _numWords
+	) external returns (uint256 requestId) {
+		requestId = requestRandomness(
+			_callbackGaslimit,
+			_requestConfirmations,
+			_numWords
+		);
 		uint256 paid = VRF_V2_WRAPPER.calculateRequestPrice(_callbackGaslimit);
 		uint256 balance = LINK.balanceOf(address(this));
 		if (balance < paid) revert InsufficientFunds(balance, paid);
 		return requestId;
-
 	}
 
-	function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords) internal override {
+	function fulfillRandomWords(
+		uint256 _requestId,
+		uint256[] memory _randomWords
+	) internal override {
 		AjoDAOData storage s = s_ajoDao;
 		s_randomWords = _randomWords;
-		uint256 potWinnerIndex = s_randomWords[0] %  s.contributors.length;
+		uint256 potWinnerIndex = s_randomWords[0] % s.contributors.length;
 		address potWinner = s.contributors[potWinnerIndex];
 
-		if (AjoDAOPurseBalance >= s.contributionAmount * s.contributors.length) {
-			(bool success, ) = msg.sender.call{value: AjoDAOPurseBalance}("");
+		if (
+			AjoDAOPurseBalance >= s.contributionAmount * s.contributors.length
+		) {
+			(bool success, ) = potWinner.call{ value: AjoDAOPurseBalance }("");
 			if (!success) {
 				revert TransferFailed();
 			}
-			emit AjoPotWinner(msg.sender, AjoDAOPurseBalance);
+			emit AjoPotWinner(potWinner, AjoDAOPurseBalance);
 			AjoDAOPurseBalance = 0;
-		} else if (AjoDAOPursePenaltyTokenBalance[s.token] >= s.contributionAmount * s.contributors.length) {
+		} else if (
+			AjoDAOPursePenaltyTokenBalance[s.token] >=
+			s.contributionAmount * s.contributors.length
+		) {
 			address payable tokenAddress = payable(s.token);
-			bool success = IERC20(tokenAddress).transfer(msg.sender, AjoDAOPursePenaltyTokenBalance[s.token]);
+			bool success = IERC20(tokenAddress).transfer(
+				potWinner,
+				AjoDAOPursePenaltyTokenBalance[s.token]
+			);
 			if (!success) {
 				revert TransferFailed();
 			}
-					emit AjoPotWinner(msg.sender, AjoDAOPurseBalance);
+			emit AjoPotWinner(potWinner, AjoDAOPurseBalance);
 
+			pushNotification(
+				potWinner,
+				"Pot winner",
+				"You won the pot for this Ajo round"
+			);
 		}
 
 		paidParticipants++;
 		if (paidParticipants == s.maxParticipants) {
 			s.t_state = TANDA_STATE.CLOSED;
-
 		} else {
 			s.t_state = TANDA_STATE.OPEN;
-
 		}
-
 	}
-
 
 	/**
 	 * Function that allows the contract to receive ETH
@@ -506,5 +558,29 @@ contract AjoDAO is IERC721Receiver, AutomationCompatibleInterface, VRFV2WrapperC
 		bytes calldata data
 	) external override returns (bytes4) {
 		return this.onERC721Received.selector;
+	}
+
+	function pushNotification(
+		address to,
+		string memory title,
+		string memory body
+	) internal {
+		IPUSHCommInterface(EPNS_COMM_ADDRESS).sendNotification(
+			0x050Ca75E3957c37dDF26D58046d8F9967B88190c, // from channel
+			to, // to recipient
+			bytes(
+				string(
+					abi.encodePacked(
+						"0", // notification identity
+						"+", // segregator
+						"3", // payload type
+						"+", // segregator
+						title, // notification title
+						"+", // segregator
+						body // notification body
+					)
+				)
+			)
+		);
 	}
 }

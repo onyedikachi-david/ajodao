@@ -44,6 +44,16 @@ const contracts = {
                   name: "_description",
                   type: "string",
                 },
+                {
+                  internalType: "address",
+                  name: "_linkAddress",
+                  type: "address",
+                },
+                {
+                  internalType: "address",
+                  name: "_wrapperAddress",
+                  type: "address",
+                },
               ],
               stateMutability: "nonpayable",
               type: "constructor",
@@ -52,6 +62,46 @@ const contracts = {
               inputs: [],
               name: "FunctionInvalidAtThisState",
               type: "error",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "uint256",
+                  name: "balance",
+                  type: "uint256",
+                },
+                {
+                  internalType: "uint256",
+                  name: "paid",
+                  type: "uint256",
+                },
+              ],
+              name: "InsufficientFunds",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "TransferFailed",
+              type: "error",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "potWinner",
+                  type: "address",
+                },
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "amount",
+                  type: "uint256",
+                },
+              ],
+              name: "AjoPotWinner",
+              type: "event",
             },
             {
               anonymous: false,
@@ -304,6 +354,30 @@ const contracts = {
             {
               inputs: [
                 {
+                  internalType: "bytes",
+                  name: "checkData",
+                  type: "bytes",
+                },
+              ],
+              name: "checkUpkeep",
+              outputs: [
+                {
+                  internalType: "bool",
+                  name: "upkeepNeeded",
+                  type: "bool",
+                },
+                {
+                  internalType: "bytes",
+                  name: "performData",
+                  type: "bytes",
+                },
+              ],
+              stateMutability: "view",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
                   internalType: "address",
                   name: "",
                   type: "address",
@@ -452,6 +526,66 @@ const contracts = {
               name: "payPenaltyFee",
               outputs: [],
               stateMutability: "payable",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "bytes",
+                  name: "_performData",
+                  type: "bytes",
+                },
+              ],
+              name: "performUpkeep",
+              outputs: [],
+              stateMutability: "nonpayable",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "uint256",
+                  name: "_requestId",
+                  type: "uint256",
+                },
+                {
+                  internalType: "uint256[]",
+                  name: "_randomWords",
+                  type: "uint256[]",
+                },
+              ],
+              name: "rawFulfillRandomWords",
+              outputs: [],
+              stateMutability: "nonpayable",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "uint32",
+                  name: "_callbackGaslimit",
+                  type: "uint32",
+                },
+                {
+                  internalType: "uint16",
+                  name: "_requestConfirmations",
+                  type: "uint16",
+                },
+                {
+                  internalType: "uint32",
+                  name: "_numWords",
+                  type: "uint32",
+                },
+              ],
+              name: "requestRandomWords",
+              outputs: [
+                {
+                  internalType: "uint256",
+                  name: "requestId",
+                  type: "uint256",
+                },
+              ],
+              stateMutability: "nonpayable",
               type: "function",
             },
             {

@@ -34,6 +34,8 @@ const deployYourContract: DeployFunction = async function (hre: HardhatRuntimeEn
       1,
       "AjoDAO Alpha",
       "First AjoDAO test cycle",
+      "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+      "0x5A861794B927983406fCE1D062e00b9368d97Df6",
     ],
     log: true,
     // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
